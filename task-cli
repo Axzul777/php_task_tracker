@@ -1,0 +1,250 @@
+#!/usr/bin/php
+
+<?php
+
+
+enum TaskStatus: string
+{
+    case Todo = "todo";
+    case InProgress = "in-progress";
+    case Done = "done";
+}
+
+enum Command: string {
+    case Add = "add";
+    case Update = "update";
+    case Delete = "delete";
+    case MarkInProgress = "mark-in-progress";
+    case MarkAsDone = "mark-done";
+    case List = "list";
+}
+
+class Task implements JsonSerializable
+{
+    public readonly int $id;
+    private string $description;
+    private string $createdAt;
+    private array $updatedAt;
+    private TaskStatus $status;
+
+
+    function __construct(
+        int $id, 
+        string $description,
+        string $createdAt = "", 
+        array $updatedAt = [], 
+        TaskStatus $status = TaskStatus::Todo)
+    {   
+        $this->id = $id;
+        $this->description = $description;
+        $this->createdAt = empty($createdAt) ? (new DateTime())->format("Y-m-d H:i:s") : $createdAt;
+        $this->updatedAt = $updatedAt;
+        $this->status = $status;
+    }
+
+
+    // Json to Array
+    public function jsonSerialize(): mixed
+    {
+        return [
+            "id" => $this->id,
+            "description" => $this->description,
+            "createdAt" => $this->createdAt,
+            "updatedAt" => $this->updatedAt,
+            "status"   => $this->status,
+        ];
+    }
+
+    // Array to json
+    static public function jsonDeserialize(array $data) : self {
+        return new self(
+            $data["id"],
+            $data["description"],
+            $data["createdAt"],
+            $data["updatedAt"],
+            TaskStatus::from($data["status"]),
+        );
+    }
+
+    static public function generateId(array $arr) : int {
+        $free_id = 0;
+        $used_ids = [];
+
+
+        foreach ($arr as $value) {
+            if (is_object($value)) {
+                $used_ids[($value->jsonSerialize())["id"]] = true;
+            } else {
+                $used_ids[$value["id"]] = true;
+            }
+        }
+
+        while (isset($used_ids[$free_id])) {
+            $free_id++;
+        }
+        
+
+        return $free_id;
+
+        // Fix it, id generator
+    }
+
+    public function update($new_description) {        
+        $this->updatedAt[] = (new Datetime())->format("Y-m-d H:i:s");
+
+        $this->description = $new_description;
+    }
+
+    public function set_progres(TaskStatus $progress) {
+        $this->status = $progress;
+    }
+    
+    public function get_status() : string {
+        return $this->status -> value;
+    }
+
+    public static function get_index_by_id($arr_locate, $to_find) : int {
+        $index = -1;
+        foreach ($arr_locate as $key => $value) {
+            if (is_object($value)) {
+                $id = $value->jsonSerialize()['id'];
+            } else {
+                $id = $value['id'];
+            }
+            if ($id == $to_find) {
+                $index = $key;
+                
+                break;
+            }
+        }
+
+        if ($index == -1) { echo "Out range. wth with you ._.)/" . PHP_EOL; }
+        else {
+            echo "index: $index, input: $to_find" . PHP_EOL;
+        }
+
+        return $index;
+    }
+}
+
+
+
+
+
+function init_file($json_path, &$todo_list) {
+    if (file_exists($json_path)) {
+        $json_list = json_decode(file_get_contents($json_path));
+    
+        foreach ($json_list as $task_arr) {
+            $todo_list[] = Task::jsonDeserialize(get_object_vars($task_arr));
+        }
+    } else {
+        $task = (new Task(Task::generateId($todo_list), "Get done every single assignment.\n"))->jsonSerialize();
+        $todo_list[] = $task;
+    }
+    
+}
+
+function unexpect_insead($expect, $got) : string { 
+    return "Unexpect argument. We expect a/n \"$expect\" insead \"$got\" \n";
+}
+
+
+
+
+function command_handler($user_input, &$todo_list) {
+    // if de si existe algun parametro
+    match ($user_input[1]) {
+        Command::Add            ->value => $todo_list[] = (new Task(Task::generateId($todo_list), $user_input[2]))->jsonSerialize(),
+        Command::Update         ->value => print(is_numeric($user_input[2]) ? $todo_list[Task::get_index_by_id($todo_list, $user_input[2])] -> update($user_input[3]) : unexpect_insead("integer", $user_input[2])), 
+        Command::Delete         ->value => print(is_numeric($user_input[2]) ? (function() { 
+            global $user_input, $todo_list; 
+            $index = Task::get_index_by_id($todo_list, $user_input[2]);
+            var_dump($todo_list);
+            // echo "index: $index, input: $user_input[2]" . PHP_EOL;
+            unset($todo_list[$index]);
+        })() : unexpect_insead("integet", $user_input[2])),
+        Command::MarkInProgress ->value => print(!is_numeric($user_input[2]) ? unexpect_insead("integer", $user_input[2]) : $todo_list[Task::get_index_by_id($todo_list, $user_input[2])] -> set_progres(TaskStatus::InProgress)), 
+        Command::MarkAsDone     ->value => print(!is_numeric($user_input[2]) ? unexpect_insead("integer", $user_input[2]) : $todo_list[Task::get_index_by_id($todo_list, $user_input[2])] -> set_progres(TaskStatus::Done)),
+        Command::List           ->value => (function() {
+            global $todo_list, $user_input;
+
+            switch ($user_input[2]) {
+                case TaskStatus::Todo->value:
+                    foreach ($todo_list as $value) {
+                        if ($value->get_status() == TaskStatus::Todo->value) {
+                            print_r(json_encode($value, JSON_PRETTY_PRINT));
+                        } else {continue;}
+                    }
+                    break;  
+
+                case TaskStatus::InProgress->value:
+                    foreach ($todo_list as $value) {
+                        if ($value->get_status() == TaskStatus::InProgress->value) {
+                            print_r(json_encode($value, JSON_PRETTY_PRINT));
+                        } else {continue;}
+                    }
+                    break;
+
+                case TaskStatus::Done->value:
+                    foreach ($todo_list as $value) {
+                        if ($value->get_status() == TaskStatus::Done->value) {
+                            print_r(json_encode($value, JSON_PRETTY_PRINT));
+                        } else {continue;}
+                    }
+                    break; 
+
+                default:
+                    if (empty($user_input[2])) {
+                        print_r(json_encode($todo_list, JSON_PRETTY_PRINT));
+                    } else {
+                        echo "Unknow parameter.\n";
+                        echo unexpect_insead("todo, in-progress, or done", $user_input[2]);
+                        echo "Aviable: done, in-progress, todo; example: ./task-cli list todo.\n";
+                    }
+                    break;
+            };
+
+        })(),
+
+        default => print("Command not found\n"),
+    };
+}
+
+
+
+// Json file name
+$json_path = "tasks.json";
+
+// Get arguments
+$user_input = $argv;
+
+// Declare array to Serialize when whe have already the file created
+$todo_list = [];
+
+
+function main() {
+    // Declare vars as globals
+    global $json_path, $user_input, $todo_list;
+    
+    // Verify if the user set eny parametter
+    // Get the number of arguments and if is great than 1 continue 
+    if (count($user_input) > 1) {
+        // Load or init file if is needed
+        init_file($json_path, $todo_list);
+
+        command_handler($user_input, $todo_list);
+
+    } else {
+        echo unexpect_insead("something", "nothing");
+        echo var_dump(Command::cases());
+    }
+    
+    
+    // Save eny chages on file
+    file_put_contents($json_path, json_encode($todo_list, JSON_PRETTY_PRINT));
+}
+
+
+
+main();
