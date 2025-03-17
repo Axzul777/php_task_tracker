@@ -33,8 +33,7 @@ Run the script from the terminal:
 chmod 777 ./task-cli
 ./task-cli add "new one"
 ```
-orclaimer
-U
+or
 ```sh
 php ./task-cli add "new task"
 ```
