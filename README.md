@@ -7,7 +7,7 @@ TASK CLI MANAGER is a simple command-line task management tool. It aims to help 
 - [roadmap sh](https://roadmap.sh/projects/task-tracker)
 
 ## Features
-- No external libraries each thin on native php
+- No external libraries each thing on native php
 - Local Json Management
 - Add new tasks
 - List all tasks
